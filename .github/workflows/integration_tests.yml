@@ -1,0 +1,25 @@
+name: 'integration test'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    container: ubuntu-latest
+    env:
+      MYSQLD_MAJOR_VERSION: "8.4"
+    steps:
+      - name: Check-out
+        uses: actions/checkout@v4
+        with:
+          path: /src
+          fetch-depth: 1
+      - name: Build
+        run: bash -x ci/build.sh
+        working-directory: /src
+      - name: Run integration test
+        run: bash -x ci/run_integration_tests.sh
+        working-directory: /src
