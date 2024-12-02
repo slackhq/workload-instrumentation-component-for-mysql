@@ -16,7 +16,7 @@ jobs:
       - name: Check-out
         uses: actions/checkout@v4
         with:
-          path: /src
+          path: src
           fetch-depth: 1
       - name: Build
         run: bash -x ci/build.sh
