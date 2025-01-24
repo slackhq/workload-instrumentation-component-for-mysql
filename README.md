@@ -105,7 +105,7 @@ Query OK, 0 rows affected (0.0005 sec)
 ## Why?
 MySQL offers outstanding instrumentation grouped by different dimensions under `performance_schema.events_*` tables (
 e.g. account, host, instance, user, etc.). Unfortunately, those dimensions do not necessarily match what you would like
-to group your metrics by. This component is my stab at allowing to group by an arbitrary attribute specified in the
+to group your metrics by. This component is my attempt at allowing to group by an arbitrary attribute specified in the
 query comment, which we call the workload.
 
 ## Building
