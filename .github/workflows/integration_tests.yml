@@ -1,12 +1,14 @@
-name: 'integration test'
-
+name: 'PR checks'
 on:
   pull_request:
     branches:
       - main
-
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'PR checks')
+  cancel-in-progress: true
 jobs:
   integration-test:
+    name: "Integration test - MySQL 8.4"
     runs-on: ubuntu-latest
     container:
       image: ubuntu:latest
