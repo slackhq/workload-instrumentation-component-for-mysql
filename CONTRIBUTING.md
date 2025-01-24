@@ -1,8 +1,6 @@
-*This is a suggested `CONTRIBUTING.md` file template for use by open sourced Salesforce projects. The main goal of this file is to make clear the intents and expectations that end-users may have regarding this project and how/if to engage with it. Adjust as needed (especially look for `workload-instrumentation-component-for-mysql` which refers to the org and repo name of your project) and remove this paragraph before committing to your repo.*
+# Contributing Guide For Workload Instrumentation Component for MySQL
 
-# Contributing Guide For {NAME OF PROJECT}
-
-This page lists the operational governance model of this project, as well as the recommendations and requirements for how to best contribute to {PROJECT}. We strive to obey these as best as possible. As always, thanks for contributing – we hope these guidelines make it easier and shed some light on our approach and processes.
+This page lists the operational governance model of this project, as well as the recommendations and requirements for how to best contribute to Workload Instrumentation Component for MySQL. We strive to obey these as best as possible. As always, thanks for contributing – we hope these guidelines make it easier and shed some light on our approach and processes.
 
 # Governance Model
 
