@@ -16,7 +16,7 @@ jobs:
       - name: "Commits signed"
         run: |
           # Check if any commit in the branch is signed
-          commits=$(git log --pretty=format:"%h %G?" | grep -v ' G' || true)
+          commits=$(git log main..HEAD --pretty=format:"%h %G?" | grep -v ' G' || true)
           if [ -n "$commits" ]; then
           echo "Error: Some commits are not signed!"
             echo "$commits"
