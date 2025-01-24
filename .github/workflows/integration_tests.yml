@@ -1,12 +1,31 @@
-name: 'integration test'
-
+name: 'PR checks'
 on:
   pull_request:
     branches:
       - main
-
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'PR checks')
+  cancel-in-progress: true
 jobs:
+  commits-signed:
+    name: "Commits signed"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check-out
+        uses: actions/checkout@v4
+      - name: "Commits signed"
+        run: |
+          # Check if any commit in the branch is signed
+          commits=$(git log main..HEAD --pretty=format:"%h %G?" | grep -v ' G' || true)
+          if [ -n "$commits" ]; then
+          echo "Error: Some commits are not signed!"
+            echo "$commits"
+            exit 1
+          else
+            echo "All commits are signed."
+          fi
   integration-test:
+    name: "Integration test - MySQL 8.4"
     runs-on: ubuntu-latest
     container:
       image: ubuntu:latest
