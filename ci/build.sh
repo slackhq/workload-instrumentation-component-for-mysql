@@ -17,7 +17,7 @@ MYSQLD_MINOR_VERSION=$(mysqld --version | sed -r 's/.* ([0-9]+\.[0-9]+\.[0-9]+) 
 
 # Get source code corresponding to the version we just installed so we can compile the component against it
 git clone --depth 1 --branch "mysql-${MYSQLD_MINOR_VERSION}" https://github.com/mysql/mysql-server.git /tmp/mysql-server
-ln -s "${PWD}/workload_instrumentation/" /tmp/mysql-server/components/
+ln -s "${PWD}/component/" /tmp/mysql-server/components/workload_instrumentation
 ORIGINAL_DIR=`pwd`
 cd /tmp/mysql-server
 
