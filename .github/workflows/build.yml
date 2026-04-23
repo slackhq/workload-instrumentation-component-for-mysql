@@ -19,9 +19,7 @@ jobs:
     steps:
       - id: set
         run: |
-          echo 'include<<JSON' >> "$GITHUB_OUTPUT"
-          cat <<'JSON' >> "$GITHUB_OUTPUT"
-          [
+          matrix='[
             {
               "build_target": "plugin",
               "mysql_flavor": "oracle",
@@ -40,8 +38,8 @@ jobs:
               "mysql_version": "8.4.9",
               "ubuntu_version": "24.04"
             }
-          ]
-          JSON
+          ]'
+          echo "include=$(echo "$matrix" | jq -c .)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: matrix
