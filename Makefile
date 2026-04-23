@@ -12,7 +12,7 @@ DIST_LABEL := $(MYSQL_FLAVOR)-$(MYSQL_VERSION)
 DIST_DIR   := $(CURDIR)/dist/$(BUILD_TARGET)/$(DIST_LABEL)
 
 ifeq ($(BUILD_TARGET),plugin)
-  SO_NAME := query_metrics.so
+  SO_NAME := workload_instrumentation.so
 else ifeq ($(BUILD_TARGET),component)
   SO_NAME := component_workload_instrumentation.so
 else

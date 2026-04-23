@@ -1,4 +1,4 @@
-#include "plugin/query_metrics/query_metrics_workload.h"
+#include "plugin/workload_instrumentation/workload_instrumentation_workload.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -72,7 +72,7 @@ static void get_query_attrs_from_query_attributes(MYSQL_THD thd,
                                                    query_attrs_t &attrs) {
   const char *wl = read_query_attribute_string(thd, "workload_name",
                                                attrs.workload_name,
-                                               QM_WORKLOAD_NAME_BUF_SIZE);
+                                               WI_WORKLOAD_NAME_BUF_SIZE);
   if (wl == nullptr) attrs.workload_name[0] = '\0';
 
   char team_buf[32];
@@ -116,8 +116,8 @@ static void get_query_attrs_from_query_comment(const char *query,
 
         size_t len = val_end - val_start;
         if (len > 0) {
-          if (len >= QM_WORKLOAD_NAME_BUF_SIZE)
-            len = QM_WORKLOAD_NAME_BUF_SIZE - 1;
+          if (len >= WI_WORKLOAD_NAME_BUF_SIZE)
+            len = WI_WORKLOAD_NAME_BUF_SIZE - 1;
           memcpy(attrs.workload_name, val_start, len);
           attrs.workload_name[len] = '\0';
           need_workload = false;
@@ -173,7 +173,7 @@ query_attrs_t get_query_attrs(MYSQL_THD thd) {
   return attrs;
 }
 
-int qm_workload_services_init(SERVICE_TYPE(registry) * reg,
+int wi_workload_services_init(SERVICE_TYPE(registry) * reg,
                                MYSQL_PLUGIN *plugin_handle) {
   my_h_service temp_service = nullptr;
 
@@ -222,7 +222,7 @@ int qm_workload_services_init(SERVICE_TYPE(registry) * reg,
   return 0;
 }
 
-void qm_workload_services_deinit(SERVICE_TYPE(registry) * reg) {
+void wi_workload_services_deinit(SERVICE_TYPE(registry) * reg) {
   if (h_query_attrs_iterator_svc != nullptr) {
     reg->release(h_query_attrs_iterator_svc);
     h_query_attrs_iterator_svc = nullptr;

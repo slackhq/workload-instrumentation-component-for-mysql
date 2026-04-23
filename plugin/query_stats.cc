@@ -4,7 +4,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
-#include "plugin/query_metrics/query_metrics.h"
+#include "plugin/workload_instrumentation/workload_instrumentation.h"
 
 #include <mysql/plugin.h>
 

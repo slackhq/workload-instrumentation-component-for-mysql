@@ -2,8 +2,8 @@
 // Created by eduardo.ortega on 12/18/25.
 //
 
-#ifndef MYSQL_AUDIT_QUERY_METRICS_H
-#define MYSQL_AUDIT_QUERY_METRICS_H
+#ifndef MYSQL_AUDIT_WORKLOAD_INSTRUMENTATION_H
+#define MYSQL_AUDIT_WORKLOAD_INSTRUMENTATION_H
 #include <mysql/plugin.h>
 
 #include <cstddef>
@@ -48,9 +48,9 @@ class query_stats_t {
   ulonglong psi_cpu_time_end = 0;
 };
 
-extern MYSQL_PLUGIN qm_plugin_handle;
+extern MYSQL_PLUGIN wi_plugin_handle;
 
 #include "mysql/components/services/registry.h"
-extern SERVICE_TYPE(registry) *qm_registry_service;
+extern SERVICE_TYPE(registry) *wi_registry_service;
 
-#endif  // MYSQL_AUDIT_QUERY_METRICS_H
+#endif  // MYSQL_AUDIT_WORKLOAD_INSTRUMENTATION_H

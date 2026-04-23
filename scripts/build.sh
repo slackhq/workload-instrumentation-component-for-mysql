@@ -15,9 +15,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 case "${BUILD_TARGET}" in
     plugin)
         LINK_SRC="${REPO_ROOT}/plugin"
-        LINK_DST="${MYSQL_SRC}/plugin/query_metrics"
-        MAKE_TARGET="query_metrics"
-        SO_NAME="query_metrics.so"
+        LINK_DST="${MYSQL_SRC}/plugin/workload_instrumentation"
+        MAKE_TARGET="workload_instrumentation"
+        SO_NAME="workload_instrumentation.so"
         ;;
     component)
         LINK_SRC="${REPO_ROOT}/component"
