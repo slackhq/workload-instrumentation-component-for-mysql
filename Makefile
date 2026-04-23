@@ -1,6 +1,6 @@
 BUILD_TARGET     ?= plugin
 MYSQL_FLAVOR     ?= oracle
-MYSQL_VERSION    ?= 8.0.42
+MYSQL_VERSION    ?= 8.0.46
 UBUNTU_VERSION   ?= 22.04
 CMAKE_BUILD_TYPE ?= RelWithDebInfo
 

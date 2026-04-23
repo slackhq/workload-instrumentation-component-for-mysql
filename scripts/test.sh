@@ -27,7 +27,7 @@ stop_system_mysql() {
 
 install_oracle_mysql() {
   apt-get update
-  apt-get install -y gnupg wget lsb-release
+  apt-get install -y gnupg wget lsb-release curl
 
   local codename lts_component
   codename=$(lsb_release -cs)
