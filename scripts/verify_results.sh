@@ -26,6 +26,15 @@ TOTAL_INIT=$CONNECTION_INIT_QUERIES
 TOTAL_UNKNOWN=$((TOTAL_UNKNOWN_RAW + TOTAL_INIT))
 TOTAL_QUERIES=$((TOTAL_TAGGED + TOTAL_UNKNOWN))
 
+TOTAL_SELECTS=$((TOTAL_EVENTS * SELECTS_PER_EVENT))
+TOTAL_INSERTS=$((TOTAL_EVENTS * INSERTS_PER_EVENT))
+TOTAL_UPDATES=$((TOTAL_EVENTS * UPDATES_PER_EVENT))
+TOTAL_DELETES=$((TOTAL_EVENTS * DELETES_PER_EVENT))
+
+EXPECTED_ROWS_SENT=$((TOTAL_UNKNOWN_RAW + TOTAL_SELECTS + TOTAL_INIT))
+EXPECTED_ROWS_AFFECTED=$((TOTAL_INSERTS + TOTAL_UPDATES + TOTAL_DELETES))
+EXPECTED_ROWS_EXAMINED=$((TOTAL_UNKNOWN_RAW + TOTAL_SELECTS + TOTAL_UPDATES + TOTAL_DELETES + TOTAL_INIT))
+
 errors=0
 
 check() {
@@ -38,15 +47,6 @@ check() {
   fi
 }
 
-check_ge() {
-  local label="$1" minimum="$2" actual="$3"
-  if [ "$actual" -lt "$minimum" ]; then
-    echo "FAIL: [$PHASE] $label — expected >= $minimum, got $actual"
-    errors=$((errors + 1))
-  else
-    echo "OK:   [$PHASE] $label = $actual (>= $minimum)"
-  fi
-}
 
 actual_total=$(mysql_q "
   SELECT SUM(COUNT_STAR)
@@ -58,10 +58,11 @@ actual_rows=$(mysql_q "
   SELECT COUNT(*)
   FROM performance_schema.workload_instrumentation
 ")
-check_ge "number of rows" 2 "$actual_rows"
-if [ "$actual_rows" -gt "$TABLE_SIZE" ]; then
-  echo "FAIL: [$PHASE] number of rows $actual_rows exceeds TABLE_SIZE $TABLE_SIZE"
+if [ "$actual_rows" -lt 2 ] || [ "$actual_rows" -gt "$TABLE_SIZE" ]; then
+  echo "FAIL: [$PHASE] number of rows — expected 2..$TABLE_SIZE, got $actual_rows"
   errors=$((errors + 1))
+else
+  echo "OK:   [$PHASE] number of rows = $actual_rows (in 2..$TABLE_SIZE)"
 fi
 
 actual_overflow=$(mysql_q "
@@ -109,8 +110,18 @@ if [ "$THREADS" -le "$((USABLE_SLOTS - 1))" ]; then
   done
 else
   echo "INFO: [$PHASE] overflow scenario — $THREADS workloads competing for $USABLE_SLOTS usable slots"
-  check_ge "named workload rows" 1 "$named_rows"
-  check_ge "<overflow> COUNT_STAR" 1 "$actual_overflow"
+  if [ "$named_rows" -lt 1 ]; then
+    echo "FAIL: [$PHASE] named workload rows — expected >= 1, got $named_rows"
+    errors=$((errors + 1))
+  else
+    echo "OK:   [$PHASE] named workload rows = $named_rows"
+  fi
+  if [ "$actual_overflow" -lt 1 ]; then
+    echo "FAIL: [$PHASE] <overflow> COUNT_STAR — expected >= 1, got $actual_overflow"
+    errors=$((errors + 1))
+  else
+    echo "OK:   [$PHASE] <overflow> COUNT_STAR = $actual_overflow"
+  fi
 
   per_named_workload=$((EVENTS_PER_THREAD * TAGGED_PER_EVENT))
   named_in_table_count=$((actual_named_total / per_named_workload))
@@ -125,23 +136,23 @@ else
   check "<overflow> COUNT_STAR" "$expected_overflow" "$actual_overflow"
 fi
 
+actual_sent=$(mysql_q "
+  SELECT SUM(SUM_ROWS_SENT)
+  FROM performance_schema.workload_instrumentation
+")
+check "total SUM_ROWS_SENT" "$EXPECTED_ROWS_SENT" "$actual_sent"
+
 actual_affected=$(mysql_q "
   SELECT SUM(SUM_ROWS_AFFECTED)
   FROM performance_schema.workload_instrumentation
 ")
-check_ge "total SUM_ROWS_AFFECTED" 1 "$actual_affected"
+check "total SUM_ROWS_AFFECTED" "$EXPECTED_ROWS_AFFECTED" "$actual_affected"
 
 actual_examined=$(mysql_q "
   SELECT SUM(SUM_ROWS_EXAMINED)
   FROM performance_schema.workload_instrumentation
 ")
-check_ge "total SUM_ROWS_EXAMINED" 1 "$actual_examined"
-
-actual_sent=$(mysql_q "
-  SELECT SUM(SUM_ROWS_SENT)
-  FROM performance_schema.workload_instrumentation
-")
-check_ge "total SUM_ROWS_SENT" 1 "$actual_sent"
+check "total SUM_ROWS_EXAMINED" "$EXPECTED_ROWS_EXAMINED" "$actual_examined"
 
 if [ "$errors" -gt 0 ]; then
   echo ""

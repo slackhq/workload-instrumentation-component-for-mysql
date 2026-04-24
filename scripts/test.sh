@@ -187,6 +187,18 @@ run_phase() {
   echo "  unknown=$unknown_queries select=$selects insert=$inserts update=$updates delete=$deletes"
   echo "============================================"
 
+  mysql -u root -S "$MYSQL_SOCK" -e "SET GLOBAL workload_instrumentation_enabled = OFF"
+  mysql -u root -S "$MYSQL_SOCK" sbtest <<'RESEED'
+DELETE FROM sbtest1;
+ALTER TABLE sbtest1 AUTO_INCREMENT = 1;
+RESEED
+  local insert_sql=""
+  local i
+  for i in $(seq 1 1000); do
+    insert_sql+="INSERT INTO sbtest1 (k, c, pad) VALUES ($i, 'row-$i', 'pad-$i');"
+  done
+  mysql -u root -S "$MYSQL_SOCK" sbtest -e "$insert_sql"
+
   mysql -u root -S "$MYSQL_SOCK" <<SQL
 SET GLOBAL workload_instrumentation_table_size = $table_size;
 SET GLOBAL workload_instrumentation_enabled = ON;
