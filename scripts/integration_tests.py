@@ -1,5 +1,8 @@
+import os
 import unittest
 import mysql.connector
+
+MYSQL_SOCK = os.environ.get("MYSQL_SOCK", "/tmp/mysql-test.sock")
 
 
 class IntegrationTest(unittest.TestCase):
@@ -11,7 +14,7 @@ class IntegrationTest(unittest.TestCase):
         cursor.close()
 
     def setUp(self):
-        self.cnx = mysql.connector.connect(user='root', unix_socket='/tmp/data/mysql.sock', database='testdb')
+        self.cnx = mysql.connector.connect(user='root', unix_socket=MYSQL_SOCK, database='testdb')
         cursor = self.cnx.cursor()
         cursor.execute("TRUNCATE TABLE test_table")
         cursor.close()

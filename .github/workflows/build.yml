@@ -1,0 +1,144 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  MYSQL_SRC: /opt/mysql-server
+  WITH_BOOST: /tmp/boost
+
+jobs:
+  commits-signed:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check commits are signed-off
+        uses: live627/check-pr-signoff-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.set.outputs.include }}
+    steps:
+      - id: set
+        run: |
+          matrix='[
+            {
+              "build_target": "plugin",
+              "mysql_flavor": "oracle",
+              "mysql_version": "8.0.46",
+              "ubuntu_version": "22.04"
+            },
+            {
+              "build_target": "plugin",
+              "mysql_flavor": "percona",
+              "mysql_version": "8.0.36-28",
+              "ubuntu_version": "22.04"
+            },
+            {
+              "build_target": "component",
+              "mysql_flavor": "oracle",
+              "mysql_version": "8.4.9",
+              "ubuntu_version": "24.04"
+            }
+          ]'
+          echo "include=$(echo "$matrix" | jq -c .)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
+
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git wget ca-certificates pkg-config \
+            libssl-dev libncurses-dev bison libtirpc-dev \
+            libcurl4-openssl-dev libudev-dev libsasl2-dev \
+            libldap2-dev libnuma-dev libreadline-dev
+
+      - name: Clone MySQL source
+        run: |
+          set -eux
+          case "${{ matrix.mysql_flavor }}" in
+            oracle)
+              git clone --depth 1 --branch "mysql-${{ matrix.mysql_version }}" \
+                https://github.com/mysql/mysql-server.git "$MYSQL_SRC"
+              ;;
+            percona)
+              git clone --depth 1 --branch "Percona-Server-${{ matrix.mysql_version }}" \
+                https://github.com/percona/percona-server.git "$MYSQL_SRC"
+              cd "$MYSQL_SRC"
+              git submodule update --init --depth 1 || true
+              ;;
+          esac
+
+      - name: Build
+        run: |
+          export BUILD_TARGET="${{ matrix.build_target }}"
+          export MYSQL_FLAVOR="${{ matrix.mysql_flavor }}"
+          export MYSQL_VERSION="${{ matrix.mysql_version }}"
+          export MYSQL_SRC="$MYSQL_SRC"
+          export CMAKE_BUILD_TYPE=RelWithDebInfo
+          scripts/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.build_target }}-${{ matrix.mysql_flavor }}-${{ matrix.mysql_version }}-ubuntu${{ matrix.ubuntu_version }}
+          path: /opt/mysql-server/build/plugin_output_directory/*.so
+
+  test:
+    needs: [matrix, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
+
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.ubuntu_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.build_target }}-${{ matrix.mysql_flavor }}-${{ matrix.mysql_version }}-ubuntu${{ matrix.ubuntu_version }}
+          path: artifacts/
+
+      - name: Run tests
+        run: |
+          export BUILD_TARGET="${{ matrix.build_target }}"
+          export MYSQL_FLAVOR="${{ matrix.mysql_flavor }}"
+          export MYSQL_VERSION="${{ matrix.mysql_version }}"
+          export ARTIFACT_DIR="artifacts"
+          export LOG_DIR="$GITHUB_WORKSPACE/test-logs"
+          scripts/test.sh
+
+      - name: Upload MySQL logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.build_target }}-${{ matrix.mysql_flavor }}-${{ matrix.mysql_version }}
+          path: test-logs/
+          if-no-files-found: ignore
