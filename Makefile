@@ -9,7 +9,7 @@ BUILD_IMAGE_TAG  := $(MYSQL_FLAVOR)-$(MYSQL_VERSION)-ubuntu$(UBUNTU_VERSION)
 BUILD_DOCKER_IMG := $(BUILD_IMAGE_NAME):$(BUILD_IMAGE_TAG)
 
 TEST_IMAGE_NAME := workload-instrumentation-test
-TEST_IMAGE_TAG  := ubuntu$(UBUNTU_VERSION)
+TEST_IMAGE_TAG  := $(MYSQL_FLAVOR)-$(MYSQL_VERSION)-ubuntu$(UBUNTU_VERSION)
 TEST_DOCKER_IMG := $(TEST_IMAGE_NAME):$(TEST_IMAGE_TAG)
 
 DIST_LABEL := $(MYSQL_FLAVOR)-$(MYSQL_VERSION)
@@ -104,6 +104,16 @@ ensure-test-image:
 	else \
 		echo "Image $(TEST_DOCKER_IMG) already exists, skipping build."; \
 	fi
+
+# ---------------------------------------------------------------------------
+# rebuild-test-image — force rebuild the test docker image
+# ---------------------------------------------------------------------------
+.PHONY: rebuild-test-image
+rebuild-test-image:
+	docker build -f test.Dockerfile \
+		--build-arg UBUNTU_VERSION=$(UBUNTU_VERSION) \
+		--no-cache \
+		-t $(TEST_DOCKER_IMG) .
 
 # ---------------------------------------------------------------------------
 # Helpers

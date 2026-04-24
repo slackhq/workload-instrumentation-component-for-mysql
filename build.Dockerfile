@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git wget ca-certificates pkg-config \
         libssl-dev libncurses-dev bison libtirpc-dev \
         libcurl4-openssl-dev libudev-dev libsasl2-dev \
-        libldap2-dev libnuma-dev libreadline-dev \
+        libldap2-dev libnuma-dev libreadline-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ARG MYSQL_FLAVOR=oracle

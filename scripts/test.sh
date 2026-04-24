@@ -8,8 +8,7 @@ ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
 LOG_DIR="${LOG_DIR:-/tmp/test-logs}"
 
 if [ "$BUILD_TARGET" = "component" ]; then
-  echo "Skipping plugin test for component build target."
-  exit 0
+  exec bash "$(cd "$(dirname "$0")" && pwd)/test_component.sh"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
