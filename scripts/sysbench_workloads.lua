@@ -6,7 +6,7 @@
 -- and executes a configurable mix of SELECTs, INSERTs, UPDATEs, and DELETEs
 -- per event, all tagged with a WORKLOAD_NAME SQL comment.  A set of "unknown"
 -- (untagged) queries is also issued per event so verify_results.sh can check
--- the <unknown> bucket.
+-- the __UNSPECIFIED__ bucket.
 --
 -- Row targeting is deterministic so that verify_results.sh can compute exact
 -- expected values for rows_sent, rows_affected, and rows_examined:

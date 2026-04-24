@@ -179,19 +179,19 @@ static int show_events_socket_send_errors(MYSQL_THD, SHOW_VAR *var, char *) {
   return 0;
 }
 
-SHOW_VAR audit_workload_instrumentation_status[] = {
-    {"Audit_workload_instrumentation_events_processed",
+SHOW_VAR workload_instrumentation_status[] = {
+    {"workload_instrumentation_events_processed",
      (char *)show_query_completion_count, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"Audit_workload_instrumentation_events_ignored_wrong_class",
+    {"workload_instrumentation_events_ignored_wrong_class",
      (char *)show_events_ignored_wrong_class, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"Audit_workload_instrumentation_events_ignored_wrong_subclass",
+    {"workload_instrumentation_events_ignored_wrong_subclass",
      (char *)show_events_ignored_wrong_subclass, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"Audit_workload_instrumentation_events_ignored_wrong_sql_command",
+    {"workload_instrumentation_events_ignored_wrong_sql_command",
      (char *)show_events_ignored_wrong_sql_command, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
-    {"Audit_workload_instrumentation_events_skipped_sampling",
+    {"workload_instrumentation_events_skipped_sampling",
      (char *)show_events_skipped_sampling, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"Audit_workload_instrumentation_socket_send_errors",
+    {"workload_instrumentation_socket_send_errors",
      (char *)show_events_socket_send_errors, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_GLOBAL}};
 

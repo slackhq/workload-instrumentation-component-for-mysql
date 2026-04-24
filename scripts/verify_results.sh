@@ -8,9 +8,9 @@
 # the actual values in performance_schema.workload_instrumentation.
 #
 # When all workloads fit in the table (no overflow), every workload and
-# the <unknown> bucket are checked individually. In overflow scenarios
+# the __UNSPECIFIED__ bucket are checked individually. In overflow scenarios
 # the script detects which workloads got their own slot and verifies the
-# <overflow> bucket accounts for the rest.
+# __OVERFLOW__ bucket accounts for the rest.
 #
 # Required env vars: MYSQL_SOCK, THREADS, EVENTS_PER_THREAD,
 #   UNKNOWN_QUERIES, SELECTS_PER_EVENT, INSERTS_PER_EVENT,
@@ -86,16 +86,16 @@ actual_total=$(mysql_q "
 ")
 check "total COUNT_STAR" "$TOTAL_QUERIES" "$actual_total"
 
-# Row count must be between 2 (at least <overflow> + one workload) and TABLE_SIZE.
+# Row count must be between 3 (reserved __OVERFLOW__ + __UNSPECIFIED__ + at least one workload) and TABLE_SIZE.
 actual_rows=$(mysql_q "
   SELECT COUNT(*)
   FROM performance_schema.workload_instrumentation
 ")
-if [ "$actual_rows" -lt 2 ] || [ "$actual_rows" -gt "$TABLE_SIZE" ]; then
-  echo "FAIL: [$PHASE] number of rows — expected 2..$TABLE_SIZE, got $actual_rows"
+if [ "$actual_rows" -lt 3 ] || [ "$actual_rows" -gt "$TABLE_SIZE" ]; then
+  echo "FAIL: [$PHASE] number of rows — expected 3..$TABLE_SIZE, got $actual_rows"
   errors=$((errors + 1))
 else
-  echo "OK:   [$PHASE] number of rows = $actual_rows (in 2..$TABLE_SIZE)"
+  echo "OK:   [$PHASE] number of rows = $actual_rows (in 3..$TABLE_SIZE)"
 fi
 
 # ---- Break down counts by workload category ----
@@ -103,38 +103,38 @@ fi
 actual_overflow=$(mysql_q "
   SELECT COUNT_STAR
   FROM performance_schema.workload_instrumentation
-  WHERE WORKLOAD_NAME = '<overflow>'
+  WHERE WORKLOAD_NAME = '__OVERFLOW__'
 ")
 
 actual_unknown=$(mysql_q "
   SELECT IFNULL(SUM(COUNT_STAR), 0)
   FROM performance_schema.workload_instrumentation
-  WHERE WORKLOAD_NAME = '<unknown>'
+  WHERE WORKLOAD_NAME = '__UNSPECIFIED__'
 ")
 
 actual_named_total=$(mysql_q "
   SELECT IFNULL(SUM(COUNT_STAR), 0)
   FROM performance_schema.workload_instrumentation
-  WHERE WORKLOAD_NAME NOT IN ('<overflow>', '<unknown>')
+  WHERE WORKLOAD_NAME NOT IN ('__OVERFLOW__', '__UNSPECIFIED__')
 ")
 
 named_rows=$(mysql_q "
   SELECT COUNT(*)
   FROM performance_schema.workload_instrumentation
-  WHERE WORKLOAD_NAME NOT IN ('<overflow>', '<unknown>')
+  WHERE WORKLOAD_NAME NOT IN ('__OVERFLOW__', '__UNSPECIFIED__')
 ")
 
 check "tagged + unknown + overflow" "$TOTAL_QUERIES" "$((actual_named_total + actual_unknown + actual_overflow))"
 
-# Slot 0 is always reserved for <overflow>, so only (TABLE_SIZE - 1) slots
-# are available for named workloads and <unknown>.
-USABLE_SLOTS=$((TABLE_SIZE - 1))
+# Slots 0 and 1 are reserved for __OVERFLOW__ and __UNSPECIFIED__, so only
+# (TABLE_SIZE - 2) slots are available for named workloads.
+USABLE_SLOTS=$((TABLE_SIZE - 2))
 
 if [ "$THREADS" -le "$((USABLE_SLOTS - 1))" ]; then
   # Normal case: all workloads fit — verify each one individually.
   check "named workload rows" "$THREADS" "$named_rows"
-  check "<overflow> COUNT_STAR" 0 "$actual_overflow"
-  check "<unknown> COUNT_STAR" "$TOTAL_UNKNOWN" "$actual_unknown"
+  check "__OVERFLOW__ COUNT_STAR" 0 "$actual_overflow"
+  check "__UNSPECIFIED__ COUNT_STAR" "$TOTAL_UNKNOWN" "$actual_unknown"
 
   for i in $(seq 1 "$THREADS"); do
     wname=$(printf "workload_%02d" "$i")
@@ -149,7 +149,7 @@ if [ "$THREADS" -le "$((USABLE_SLOTS - 1))" ]; then
 else
   # Overflow case: more workloads than slots. Slot allocation is
   # non-deterministic under concurrency, so we figure out which
-  # workloads got a slot and verify the rest ended up in <overflow>.
+  # workloads got a slot and verify the rest ended up in __OVERFLOW__.
   echo "INFO: [$PHASE] overflow scenario — $THREADS workloads competing for $USABLE_SLOTS usable slots"
   if [ "$named_rows" -lt 1 ]; then
     echo "FAIL: [$PHASE] named workload rows — expected >= 1, got $named_rows"
@@ -157,11 +157,12 @@ else
   else
     echo "OK:   [$PHASE] named workload rows = $named_rows"
   fi
+  check "__UNSPECIFIED__ COUNT_STAR" "$TOTAL_UNKNOWN" "$actual_unknown"
   if [ "$actual_overflow" -lt 1 ]; then
-    echo "FAIL: [$PHASE] <overflow> COUNT_STAR — expected >= 1, got $actual_overflow"
+    echo "FAIL: [$PHASE] __OVERFLOW__ COUNT_STAR — expected >= 1, got $actual_overflow"
     errors=$((errors + 1))
   else
-    echo "OK:   [$PHASE] <overflow> COUNT_STAR = $actual_overflow"
+    echo "OK:   [$PHASE] __OVERFLOW__ COUNT_STAR = $actual_overflow"
   fi
 
   # Each named workload that got a slot has exactly this many queries.
@@ -169,15 +170,11 @@ else
   named_in_table_count=$((actual_named_total / per_named_workload))
   echo "INFO: [$PHASE] $named_in_table_count named workloads got their own slot (each with $per_named_workload queries)"
 
-  # Workloads that didn't get a slot ended up in <overflow>.
-  # If <unknown> also didn't get a slot, its queries are in <overflow> too.
+  # Workloads that didn't get a slot ended up in __OVERFLOW__.
+  # __UNSPECIFIED__ is pre-allocated so it always has its own slot.
   named_that_overflow=$((THREADS - named_in_table_count))
-  unknown_in_overflow=0
-  if [ "$actual_unknown" -eq 0 ]; then
-    unknown_in_overflow=$TOTAL_UNKNOWN
-  fi
-  expected_overflow=$(( (named_that_overflow * per_named_workload) + unknown_in_overflow ))
-  check "<overflow> COUNT_STAR" "$expected_overflow" "$actual_overflow"
+  expected_overflow=$(( named_that_overflow * per_named_workload ))
+  check "__OVERFLOW__ COUNT_STAR" "$expected_overflow" "$actual_overflow"
 fi
 
 # ---- Verify aggregate row metrics ----

@@ -230,7 +230,7 @@ mysql_declare_plugin(audit_workload_instrumentation){
     audit_workload_instrumentation_check_uninstall,
     audit_workload_instrumentation_plugin_deinit,
     0x0001,
-    audit_workload_instrumentation_status,
+    workload_instrumentation_status,
     workload_instrumentation_system_variables,
     nullptr,
     0,

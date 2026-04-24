@@ -14,7 +14,7 @@ extern bool workload_instrumentation_socket_enabled;
 extern char *workload_instrumentation_socket_path;
 
 extern SYS_VAR *workload_instrumentation_system_variables[];
-extern SHOW_VAR audit_workload_instrumentation_status[];
+extern SHOW_VAR workload_instrumentation_status[];
 
 void wi_reset_status_counters();
 void wi_increment_events_processed();

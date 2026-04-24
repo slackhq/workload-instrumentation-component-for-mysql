@@ -35,9 +35,13 @@ WI_Record *wi_records_array = nullptr;
 std::unordered_map<std::string, unsigned int> wi_workload_map;
 mysql_rwlock_t wi_rwlock;
 
-static const char *WI_OVERFLOW_NAME = "<overflow>";
-static const unsigned int WI_OVERFLOW_NAME_LEN = 10;
+static const char *WI_OVERFLOW_NAME = "__OVERFLOW__";
+static const unsigned int WI_OVERFLOW_NAME_LEN = 12;
 static const unsigned int WI_OVERFLOW_SLOT = 0;
+
+static const char *WI_UNSPECIFIED_NAME = "__UNSPECIFIED__";
+static const unsigned int WI_UNSPECIFIED_NAME_LEN = 15;
+static const unsigned int WI_UNSPECIFIED_SLOT = 1;
 
 /* Tracks how many slots currently have m_exist == true. */
 static unsigned int wi_rows_in_table = 0;
@@ -45,10 +49,11 @@ static unsigned int wi_rows_in_table = 0;
 /* Next available index for a new record slot. */
 static unsigned int wi_next_available_index = 0;
 
-static void wi_init_overflow_record(WI_Record *rec) {
-  memcpy(rec->workload_name, WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN);
-  rec->workload_name[WI_OVERFLOW_NAME_LEN] = '\0';
-  rec->workload_name_length = WI_OVERFLOW_NAME_LEN;
+static void wi_init_reserved_record(WI_Record *rec, const char *name,
+                                    unsigned int name_len) {
+  memcpy(rec->workload_name, name, name_len);
+  rec->workload_name[name_len] = '\0';
+  rec->workload_name_length = name_len;
   rec->m_exist.store(true, std::memory_order_relaxed);
 }
 
@@ -194,11 +199,16 @@ static void copy_record(WI_Row_Copy *dest, WI_Record *source) {
 */
 void wi_allocate_records() {
   wi_records_array = new WI_Record[workload_instrumentation_table_size]();
-  wi_init_overflow_record(&wi_records_array[WI_OVERFLOW_SLOT]);
+  wi_init_reserved_record(&wi_records_array[WI_OVERFLOW_SLOT],
+                          WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN);
   wi_workload_map[std::string(WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN)] =
       WI_OVERFLOW_SLOT;
-  wi_rows_in_table = 1;
-  wi_next_available_index = 1;
+  wi_init_reserved_record(&wi_records_array[WI_UNSPECIFIED_SLOT],
+                          WI_UNSPECIFIED_NAME, WI_UNSPECIFIED_NAME_LEN);
+  wi_workload_map[std::string(WI_UNSPECIFIED_NAME, WI_UNSPECIFIED_NAME_LEN)] =
+      WI_UNSPECIFIED_SLOT;
+  wi_rows_in_table = 2;
+  wi_next_available_index = 2;
 }
 
 /*
@@ -292,11 +302,16 @@ void wi_resize_table(ulong new_size) {
     wi_workload_map[std::string(dst->workload_name, dst->workload_name_length)] = i;
   }
 
-  if (copy_count == 0) {
-    wi_init_overflow_record(&new_array[WI_OVERFLOW_SLOT]);
+  if (copy_count < 2) {
+    wi_init_reserved_record(&new_array[WI_OVERFLOW_SLOT],
+                            WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN);
     wi_workload_map[std::string(WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN)] =
         WI_OVERFLOW_SLOT;
-    copy_count = 1;
+    wi_init_reserved_record(&new_array[WI_UNSPECIFIED_SLOT],
+                            WI_UNSPECIFIED_NAME, WI_UNSPECIFIED_NAME_LEN);
+    wi_workload_map[std::string(WI_UNSPECIFIED_NAME, WI_UNSPECIFIED_NAME_LEN)] =
+        WI_UNSPECIFIED_SLOT;
+    copy_count = 2;
   }
 
   delete[] wi_records_array;
@@ -653,11 +668,16 @@ int wi_delete_all_rows(void) {
                                                       std::memory_order_relaxed);
   }
   wi_workload_map.clear();
-  wi_init_overflow_record(&wi_records_array[WI_OVERFLOW_SLOT]);
+  wi_init_reserved_record(&wi_records_array[WI_OVERFLOW_SLOT],
+                          WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN);
   wi_workload_map[std::string(WI_OVERFLOW_NAME, WI_OVERFLOW_NAME_LEN)] =
       WI_OVERFLOW_SLOT;
-  wi_rows_in_table = 1;
-  wi_next_available_index = 1;
+  wi_init_reserved_record(&wi_records_array[WI_UNSPECIFIED_SLOT],
+                          WI_UNSPECIFIED_NAME, WI_UNSPECIFIED_NAME_LEN);
+  wi_workload_map[std::string(WI_UNSPECIFIED_NAME, WI_UNSPECIFIED_NAME_LEN)] =
+      WI_UNSPECIFIED_SLOT;
+  wi_rows_in_table = 2;
+  wi_next_available_index = 2;
   mysql_rwlock_unlock(&wi_rwlock);
 
   return 0;

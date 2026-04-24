@@ -167,7 +167,7 @@ query_attrs_t get_query_attrs(MYSQL_THD thd) {
   }
 
   if (attrs.workload_name[0] == '\0') {
-    memcpy(attrs.workload_name, "<unknown>", 10);
+    memcpy(attrs.workload_name, "__UNSPECIFIED__", 15);
   }
 
   return attrs;
