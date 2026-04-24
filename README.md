@@ -7,6 +7,11 @@ query execution completion events, parses the workload name from a specially for
 or query attribute, gathers performance metrics, and exposes cumulative per-workload statistics in
 the `performance_schema.workload_instrumentation` table.
 
+MySQL offers outstanding instrumentation grouped by different dimensions under
+`performance_schema.events_*` tables (e.g. account, host, instance, user, etc.). Unfortunately,
+those dimensions do not necessarily match what you would like to group your metrics by. This project
+allows grouping by an arbitrary attribute specified in the query comment, which we call the workload.
+
 Two implementations are provided:
 
 * **Plugin** (audit API) — for Oracle MySQL 8.0 and Percona Server 8.0. Source in `plugin/`.
@@ -29,7 +34,11 @@ The workload name is resolved from two sources, checked in this order:
    when using connectors that support query attributes (MySQL 8.0.25+).
 2. **SQL comment**: A comment of the form `/* WORKLOAD_NAME=<name> */` anywhere in the query text.
 
-The workload name must match the regex `[A-Za-z0-9-_:.\\/\\\\]+`.
+The workload name must match the regex ``[A-Za-z0-9\-_:./\\]+``.
+
+> **Note:** The `mysql` CLI strips comments before sending the query to the server by default. Use
+> `mysql -c` (or `--comments`) to preserve them. Most MySQL connectors and drivers preserve comments
+> by default.
 
 Queries that do not carry a valid workload name through either method are assigned to the special
 `__UNSPECIFIED__` workload.
@@ -46,16 +55,15 @@ table.
 
 ### Instrumented query types
 
-Only DML statements are instrumented: `SELECT`, `INSERT`, `INSERT...SELECT`, `UPDATE`,
+The plugin only instruments DML statements: `SELECT`, `INSERT`, `INSERT...SELECT`, `UPDATE`,
 `UPDATE...MULTI`, `DELETE`, `DELETE...MULTI`, `REPLACE`, `REPLACE...SELECT`, and `LOAD DATA`.
-All other statement types (DDL, administrative, etc.) are ignored.
+All other statement types (DDL, administrative, etc.) are ignored. The component currently
+instruments all query types.
 
-## Why?
+### Special workloads
 
-MySQL offers outstanding instrumentation grouped by different dimensions under
-`performance_schema.events_*` tables (e.g. account, host, instance, user, etc.). Unfortunately,
-those dimensions do not necessarily match what you would like to group your metrics by. This project
-allows grouping by an arbitrary attribute specified in the query comment, which we call the workload.
+* `__UNSPECIFIED__` — queries without a valid workload name.
+* `__OVERFLOW__` — queries that arrived after the table was full. See each implementation for capacity details.
 
 ## Plugin
 
@@ -65,6 +73,12 @@ The plugin uses the MySQL audit API and is compatible with Oracle MySQL 8.0 and 
 
 ```sql
 INSTALL PLUGIN WORKLOAD_INSTRUMENTATION SONAME 'workload_instrumentation.so';
+```
+
+### Uninstallation
+
+```sql
+UNINSTALL PLUGIN WORKLOAD_INSTRUMENTATION;
 ```
 
 ### System variables
@@ -96,8 +110,10 @@ Available via `SHOW GLOBAL STATUS LIKE 'workload_instrumentation%'`.
 
 ### PFS table schema
 
-The `performance_schema.workload_instrumentation` table supports `SELECT` and `TRUNCATE TABLE`.
-It has a `WORKLOAD_NAME VARCHAR(256)` column (indexed) and the following metric columns:
+The `performance_schema.workload_instrumentation` table supports `SELECT` and `TRUNCATE TABLE`
+(truncating resets all counters to zero). Default capacity is 10,000 workload slots, configurable
+via `workload_instrumentation_table_size`. It has a `WORKLOAD_NAME VARCHAR(256)` column (indexed)
+and the following metric columns:
 
 | Column | Description |
 |---|---|
@@ -122,10 +138,10 @@ It has a `WORKLOAD_NAME VARCHAR(256)` column (indexed) and the following metric 
 | `SUM_NO_INDEX_USED` | Queries with no index |
 | `SUM_NO_GOOD_INDEX_USED` | Queries with no good index |
 
-### Special workloads
-
-* `__UNSPECIFIED__` — queries without a valid workload name.
-* `__OVERFLOW__` — queries that arrived after the table was full.
+> **Note:** `SUM_CPU_TIME` requires the `events_statements_cpu` consumer to be enabled:
+> ```sql
+> UPDATE performance_schema.setup_consumers SET ENABLED = 'YES' WHERE NAME = 'events_statements_cpu';
+> ```
 
 ### Per-query JSON output
 
@@ -137,19 +153,17 @@ instrumented query containing: `workload_name`, `team_id`, `timer_wait_ns`, `cpu
 `no_index_used`, `no_good_index_used`.
 
 With `warnings_enabled = ON` (the default), this JSON is pushed to the client as a note-level
-warning after each instrumented query. Clients can retrieve it with `SHOW WARNINGS`:
+warning after each instrumented query. Clients can retrieve it with `SHOW WARNINGS`.
 
-With `socket_enabled = ON`, the JSON is sent over a Unix DGRAM socket wrapped in a binary Murron
-frame (version, nanosecond timestamp, hostname, message type, payload). The socket auto-reconnects
+With `socket_enabled = ON`, the JSON is sent over a Unix DGRAM socket wrapped in a binary
+envelope (version, nanosecond timestamp, hostname, message type, payload). The socket auto-reconnects
 every 5 seconds on failure. The hostname is resolved from `report_host` or `hostname` server
 variables.
 
-### Example
+### Examples
 
-#### Performance Schema Table
-> **Note:** The `mysql` CLI strips comments before sending the query to the server by default. Use
-> `mysql -c` (or `--comments`) to preserve them. Most MySQL connectors and drivers preserve comments
-> by default.
+#### Performance Schema table
+
 ```sql
 mysql> INSTALL PLUGIN WORKLOAD_INSTRUMENTATION SONAME 'workload_instrumentation.so';
 
@@ -171,12 +185,9 @@ mysql> SELECT * FROM performance_schema.workload_instrumentation WHERE WORKLOAD_
 Columns are consistent with and in the same units as other `performance_schema` columns, including times in `ps`.
 
 #### Warnings
-> **Note:** The `mysql` CLI strips comments before sending the query to the server by default. Use
-> `mysql -c` (or `--comments`) to preserve them. Most MySQL connectors and drivers preserve comments
-> by default.
 
 ```sql
-SELECT * FROM test.test_table; SHOW WARNINGS;
+mysql> SELECT * FROM test.test_table; SHOW WARNINGS;
 +----+---------+
 | id | content |
 +----+---------+
@@ -196,7 +207,7 @@ SELECT * FROM test.test_table; SHOW WARNINGS;
 1 row in set (0.00 sec)
 ```
 
-#### Unix Socket
+#### Unix socket
 
 Enable the socket export and point it to a Unix DGRAM socket:
 
@@ -206,13 +217,15 @@ mysql> SET GLOBAL workload_instrumentation_socket_enabled = ON;
 ```
 
 A minimal listener that decodes the datagram frame and prints the JSON payload:
+
 ```bash
 python3 -c "import socket,os,struct,json,sys;p=sys.argv[1];os.path.exists(p)and os.unlink(p);s=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM);s.bind(p)
 while d:=s.recv(65536):o=0;v,t=struct.unpack_from('<iq',d,o);o+=12;hl,=struct.unpack_from('<i',d,o);o+=4;h=d[o:o+hl].decode();o+=hl;tl,=struct.unpack_from('<i',d,o);o+=4;mt=d[o:o+tl].decode();o+=tl;pl,=struct.unpack_from('<i',d,o);o+=4;print(json.dumps({'version':v,'timestamp_ns':t,'hostname':h,'type':mt,'payload':json.loads(d[o:o+pl])}),flush=True)
 " /tmp/wi.sock
 ```
 
-Run a query
+Then run a query in another terminal:
+
 ```sql
 mysql> SELECT * FROM test.test_table;
 +----+---------+
@@ -227,7 +240,7 @@ mysql> SELECT * FROM test.test_table;
 5 rows in set (0.01 sec)
 ```
 
-Sample output:
+Sample output from the listener:
 
 ```json
 {"version": 1, "timestamp_ns": 1777047539981463000, "hostname": "e2f3f87e88e7", "type": "mysql_workload_instrumentation", "payload": {"workload_name": "__UNSPECIFIED__", "team_id": 0, "timer_wait_ns": 209848, "cpu_time_ns": 210072, "lock_time_us": 3, "rows_affected": 0, "rows_examined": 5, "rows_sent": 5, "created_tmp_disk_tables": 0, "created_tmp_tables": 0, "select_full_join": 0, "select_full_range_join": 0, "select_range": 0, "select_range_check": 0, "select_scan": 1, "sort_merge_passes": 0, "sort_range": 0, "sort_rows": 0, "sort_scan": 0, "no_index_used": 1, "no_good_index_used": 0}}
@@ -243,6 +256,12 @@ The component uses the MySQL service API and is compatible with Oracle MySQL 8.4
 INSTALL COMPONENT 'file://component_workload_instrumentation';
 ```
 
+### Uninstallation
+
+```sql
+UNINSTALL COMPONENT 'file://component_workload_instrumentation';
+```
+
 ### PFS table schema
 
 The `performance_schema.workload_instrumentation` table has a `WORKLOAD VARCHAR(50)` column and
@@ -255,11 +274,6 @@ the following metric columns:
 | `SUM_ROWS_SENT` | Rows returned to client |
 | `SUM_ROWS_AFFECTED` | Rows affected (INSERT/UPDATE/DELETE) |
 | `SUM_DURATION_US` | Total wallclock duration (microseconds) |
-
-### Special workloads
-
-* `__UNSPECIFIED__` — queries without a valid workload name.
-* `__OVERFLOW__` — queries that arrived after the table was full.
 
 The table has a fixed capacity of 5,000 workload slots (plus `__UNSPECIFIED__` and `__OVERFLOW__`).
 
@@ -283,9 +297,9 @@ mysql> SELECT * FROM performance_schema.workload_instrumentation WHERE WORKLOAD=
 +----------------+---------------+-------------------+---------------+-------------------+-----------------+
 ```
 
-## Building
+## Development
 
-### Requirements
+### Build requirements
 
 * **Plugin**: Oracle MySQL 8.0 or Percona Server for MySQL 8.0 source code.
 * **Component**: Oracle MySQL 8.4+ source code.
@@ -319,7 +333,7 @@ Artifacts are placed in `dist/<target>/<flavor>-<version>/`.
   * Component: `make component_workload_instrumentation`
 * The `.so` file will be in `plugin_output_directory/` under your cmake build directory.
 
-## Testing
+### Testing
 
 Integration tests run inside Docker containers:
 
