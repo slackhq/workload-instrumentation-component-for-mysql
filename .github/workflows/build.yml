@@ -120,4 +120,13 @@ jobs:
           export MYSQL_FLAVOR="${{ matrix.mysql_flavor }}"
           export MYSQL_VERSION="${{ matrix.mysql_version }}"
           export ARTIFACT_DIR="artifacts"
+          export LOG_DIR="$GITHUB_WORKSPACE/test-logs"
           scripts/test.sh
+
+      - name: Upload MySQL logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.build_target }}-${{ matrix.mysql_flavor }}-${{ matrix.mysql_version }}
+          path: test-logs/
+          if-no-files-found: ignore

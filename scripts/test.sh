@@ -5,6 +5,7 @@ BUILD_TARGET="${BUILD_TARGET:?}"
 MYSQL_FLAVOR="${MYSQL_FLAVOR:?}"
 MYSQL_VERSION="${MYSQL_VERSION:?}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
+LOG_DIR="${LOG_DIR:-/tmp/test-logs}"
 
 if [ "$BUILD_TARGET" = "component" ]; then
   echo "Skipping plugin test for component build target."
@@ -17,6 +18,17 @@ MYSQL_SOCK="/tmp/mysql-test.sock"
 MYSQL_PORT=13306
 
 export MYSQL_SOCK
+
+mkdir -p "$LOG_DIR"
+
+MYSQL_ERROR_LOG="$MYSQL_DATADIR/error.log"
+
+collect_logs() {
+  cp "$MYSQL_ERROR_LOG" "$LOG_DIR/" 2>/dev/null || true
+  chmod -R a+r "$LOG_DIR" 2>/dev/null || true
+  echo "MySQL logs saved to $LOG_DIR"
+}
+trap collect_logs EXIT
 
 MAJOR_VERSION=$(echo "$MYSQL_VERSION" | sed 's/^\([0-9]*\.[0-9]*\).*/\1/')
 
@@ -72,8 +84,24 @@ install_percona_mysql() {
   ps_series=$(echo "$MAJOR_VERSION" | tr -d '.')
   percona-release setup "ps${ps_series}"
   apt-get update
+
+  local pkg_version
+  pkg_version=$(apt-cache madison percona-server-server \
+    | awk -F'|' -v ver="$MYSQL_VERSION" '$2 ~ ver {gsub(/^ +| +$/,"",$2); print $2; exit}')
+
+  if [ -z "$pkg_version" ]; then
+    echo "ERROR: Could not find percona-server-server version matching $MYSQL_VERSION" >&2
+    echo "Available versions:" >&2
+    apt-cache madison percona-server-server >&2
+    exit 1
+  fi
+
+  echo "Installing percona-server-server=$pkg_version"
   DEBIAN_FRONTEND=noninteractive PERCONA_TELEMETRY_DISABLE=1 \
-    apt-get install -y "percona-server-server"
+    apt-get install -y --allow-downgrades \
+      "percona-server-common=${pkg_version}" \
+      "percona-server-client=${pkg_version}" \
+      "percona-server-server=${pkg_version}"
   stop_system_mysql
 }
 
@@ -107,6 +135,7 @@ mysqld --user=mysql \
   --port="$MYSQL_PORT" \
   --socket="$MYSQL_SOCK" \
   --mysqlx=OFF \
+  --log-error="$MYSQL_ERROR_LOG" \
   &
 
 for i in $(seq 1 30); do

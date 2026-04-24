@@ -74,15 +74,20 @@ rebuild-build-image:
 # ---------------------------------------------------------------------------
 # test — run integration tests inside a docker container
 # ---------------------------------------------------------------------------
+LOG_DIR := $(CURDIR)/logs
+
 .PHONY: test
 test: ensure-test-image
+	mkdir -p $(LOG_DIR)
 	docker run --rm \
 		-v $(CURDIR)/scripts:/repo/scripts:ro \
 		-v $(DIST_DIR):/repo/artifacts:ro \
+		-v $(LOG_DIR):/repo/logs \
 		-e BUILD_TARGET=$(BUILD_TARGET) \
 		-e MYSQL_FLAVOR=$(MYSQL_FLAVOR) \
 		-e MYSQL_VERSION=$(MYSQL_VERSION) \
 		-e ARTIFACT_DIR=/repo/artifacts \
+		-e LOG_DIR=/repo/logs \
 		$(TEST_DOCKER_IMG) \
 		bash /repo/scripts/test.sh
 
