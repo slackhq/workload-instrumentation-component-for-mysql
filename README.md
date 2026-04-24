@@ -12,8 +12,14 @@ Two implementations are provided:
 * **Plugin** (audit API) — for Oracle MySQL 8.0 and Percona Server 8.0. Source in `plugin/`.
 * **Component** (service API) — for Oracle MySQL 8.4+. Source in `component/`.
 
-The plugin is currently more feature-complete than the component. We intend to bring the component
-to feature parity in the future.
+The plugin is currently more feature-complete than the component. Its additional features include:
+* The `workload_instrumentation` table has additional per workload statistics.
+* In addition to the `performance_schema` table, the plugin also allows to expose per query 
+  statistics via two different paths:
+  * Back to the client via a MySQL warning.
+  * To a unix domain datagram socket from which another process can read them.
+
+We intend to bring the component to feature parity with the plugin in the future.
 
 ### Workload identification
 
