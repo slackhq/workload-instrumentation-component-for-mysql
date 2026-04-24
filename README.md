@@ -139,23 +139,6 @@ instrumented query containing: `workload_name`, `team_id`, `timer_wait_ns`, `cpu
 With `warnings_enabled = ON` (the default), this JSON is pushed to the client as a note-level
 warning after each instrumented query. Clients can retrieve it with `SHOW WARNINGS`:
 
-```sql
-mysql> SELECT /* WORKLOAD_NAME=api_endpoint_1 */ * FROM test.test_table WHERE id=4;
-+----+---------+
-| id | content |
-+----+---------+
-|  4 | dd      |
-+----+---------+
-1 row in set, 1 warning (0.00 sec)
-
-mysql> SHOW WARNINGS;
-+-------+------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Level | Code | Message                                                                                                                                                                                                                                                                                                                                                                                                                        |
-+-------+------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Note  | 1003 | {"workload_name":"api_endpoint_1","team_id":0,"timer_wait_ns":136354,"cpu_time_ns":0,"lock_time_us":2,"rows_affected":0,"rows_examined":1,"rows_sent":1,"created_tmp_disk_tables":0,"created_tmp_tables":0,"select_full_join":0,"select_full_range_join":0,"select_range":0,"select_range_check":0,"select_scan":0,"sort_merge_passes":0,"sort_range":0,"sort_rows":0,"sort_scan":0,"no_index_used":0,"no_good_index_used":0} |
-+-------+------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-```
-
 With `socket_enabled = ON`, the JSON is sent over a Unix DGRAM socket wrapped in a binary Murron
 frame (version, nanosecond timestamp, hostname, message type, payload). The socket auto-reconnects
 every 5 seconds on failure. The hostname is resolved from `report_host` or `hostname` server
@@ -163,6 +146,10 @@ variables.
 
 ### Example
 
+#### Performance Schema Table
+> **Note:** The `mysql` CLI strips comments before sending the query to the server by default. Use
+> `mysql -c` (or `--comments`) to preserve them. Most MySQL connectors and drivers preserve comments
+> by default.
 ```sql
 mysql> INSTALL PLUGIN WORKLOAD_INSTRUMENTATION SONAME 'workload_instrumentation.so';
 
@@ -182,6 +169,69 @@ mysql> SELECT * FROM performance_schema.workload_instrumentation WHERE WORKLOAD_
 ```
 
 Columns are consistent with and in the same units as other `performance_schema` columns, including times in `ps`.
+
+#### Warnings
+> **Note:** The `mysql` CLI strips comments before sending the query to the server by default. Use
+> `mysql -c` (or `--comments`) to preserve them. Most MySQL connectors and drivers preserve comments
+> by default.
+
+```sql
+SELECT * FROM test.test_table; SHOW WARNINGS;
++----+---------+
+| id | content |
++----+---------+
+|  1 | aa      |
+|  2 | bb      |
+|  3 | cc      |
+|  4 | dd      |
+|  5 | ee      |
++----+---------+
+5 rows in set (0.00 sec)
+
++-------+------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Level | Code | Message                                                                                                                                                                                                                                                                                                                                                                                                                             |
++-------+------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Note  | 1003 | {"workload_name":"__UNSPECIFIED__","team_id":0,"timer_wait_ns":170128,"cpu_time_ns":169822,"lock_time_us":1,"rows_affected":0,"rows_examined":5,"rows_sent":5,"created_tmp_disk_tables":0,"created_tmp_tables":0,"select_full_join":0,"select_full_range_join":0,"select_range":0,"select_range_check":0,"select_scan":1,"sort_merge_passes":0,"sort_range":0,"sort_rows":0,"sort_scan":0,"no_index_used":1,"no_good_index_used":0} |
++-------+------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+```
+
+#### Unix Socket
+
+Enable the socket export and point it to a Unix DGRAM socket:
+
+```sql
+mysql> SET GLOBAL workload_instrumentation_socket_path = '/tmp/wi.sock';
+mysql> SET GLOBAL workload_instrumentation_socket_enabled = ON;
+```
+
+A minimal listener that decodes the datagram frame and prints the JSON payload:
+```bash
+python3 -c "import socket,os,struct,json,sys;p=sys.argv[1];os.path.exists(p)and os.unlink(p);s=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM);s.bind(p)
+while d:=s.recv(65536):o=0;v,t=struct.unpack_from('<iq',d,o);o+=12;hl,=struct.unpack_from('<i',d,o);o+=4;h=d[o:o+hl].decode();o+=hl;tl,=struct.unpack_from('<i',d,o);o+=4;mt=d[o:o+tl].decode();o+=tl;pl,=struct.unpack_from('<i',d,o);o+=4;print(json.dumps({'version':v,'timestamp_ns':t,'hostname':h,'type':mt,'payload':json.loads(d[o:o+pl])}),flush=True)
+" /tmp/wi.sock
+```
+
+Run a query
+```sql
+mysql> SELECT * FROM test.test_table;
++----+---------+
+| id | content |
++----+---------+
+|  1 | aa      |
+|  2 | bb      |
+|  3 | cc      |
+|  4 | dd      |
+|  5 | ee      |
++----+---------+
+5 rows in set (0.01 sec)
+```
+
+Sample output:
+
+```json
+{"version": 1, "timestamp_ns": 1777047539981463000, "hostname": "e2f3f87e88e7", "type": "mysql_workload_instrumentation", "payload": {"workload_name": "__UNSPECIFIED__", "team_id": 0, "timer_wait_ns": 209848, "cpu_time_ns": 210072, "lock_time_us": 3, "rows_affected": 0, "rows_examined": 5, "rows_sent": 5, "created_tmp_disk_tables": 0, "created_tmp_tables": 0, "select_full_join": 0, "select_full_range_join": 0, "select_range": 0, "select_range_check": 0, "select_scan": 1, "sort_merge_passes": 0, "sort_range": 0, "sort_rows": 0, "sort_scan": 0, "no_index_used": 1, "no_good_index_used": 0}}
+```
 
 ## Component
 
