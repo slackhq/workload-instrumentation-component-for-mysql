@@ -12,6 +12,16 @@ env:
   WITH_BOOST: /tmp/boost
 
 jobs:
+  commits-signed:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check signed commits in PR
+        uses: 1Password/check-signed-commits-action@v1
+
   matrix:
     runs-on: ubuntu-latest
     outputs:

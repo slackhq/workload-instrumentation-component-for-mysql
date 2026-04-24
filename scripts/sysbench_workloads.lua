@@ -1,4 +1,26 @@
 #!/usr/bin/env sysbench
+--
+-- Sysbench workload for the workload_instrumentation plugin tests.
+--
+-- Each thread is assigned a unique workload name (workload_01, workload_02, …)
+-- and executes a configurable mix of SELECTs, INSERTs, UPDATEs, and DELETEs
+-- per event, all tagged with a WORKLOAD_NAME SQL comment.  A set of "unknown"
+-- (untagged) queries is also issued per event so verify_results.sh can check
+-- the <unknown> bucket.
+--
+-- Row targeting is deterministic so that verify_results.sh can compute exact
+-- expected values for rows_sent, rows_affected, and rows_examined:
+--   * SELECTs and UPDATEs target ids 1..SAFE_RANGE (always exist after prepare).
+--   * DELETEs target non-overlapping per-thread ranges starting above
+--     SAFE_RANGE, so each DELETE affects exactly one existing row and threads
+--     never compete for the same id.
+--   * INSERTs use random keys; only their count matters for verification.
+--
+-- Constants:
+--   SEED_ROWS              – rows created during prepare (1000).
+--   SAFE_RANGE             – upper bound for SELECTs/UPDATEs (200).
+--   DELETE_RANGE_PER_THREAD – ids reserved per thread for deletes (100).
+--
 
 sysbench.cmdline.options = {
   unknown_queries = {"Number of untagged queries per event", 5},
