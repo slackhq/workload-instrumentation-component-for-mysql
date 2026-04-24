@@ -149,13 +149,11 @@ mysql -u root -S "$MYSQL_SOCK" -e "SELECT VERSION()"
 
 mysql -u root -S "$MYSQL_SOCK" <<'SQL'
 INSTALL PLUGIN WORKLOAD_INSTRUMENTATION SONAME 'workload_instrumentation.so';
-SET GLOBAL workload_instrumentation_table_size = 10;
 SET GLOBAL workload_instrumentation_warnings_enabled = OFF;
+SET GLOBAL workload_instrumentation_enabled = OFF;
 SQL
 
 mysql -u root -S "$MYSQL_SOCK" -e "CREATE DATABASE IF NOT EXISTS sbtest"
-
-mysql -u root -S "$MYSQL_SOCK" -e "SET GLOBAL workload_instrumentation_enabled = OFF"
 
 echo "Running sysbench prepare..."
 sysbench "${SCRIPT_DIR}/sysbench_workloads.lua" \
@@ -163,22 +161,69 @@ sysbench "${SCRIPT_DIR}/sysbench_workloads.lua" \
   --mysql-user=root \
   prepare
 
-mysql -u root -S "$MYSQL_SOCK" <<'SQL'
+COMMON_SB_OPTS=(
+  "${SCRIPT_DIR}/sysbench_workloads.lua"
+  --mysql-socket="$MYSQL_SOCK"
+  --mysql-user=root
+  --mysql-db=sbtest
+  --report-interval=0
+)
+
+run_phase() {
+  local phase="$1"
+  local threads="$2"
+  local events="$3"
+  local table_size="$4"
+  local unknown_queries="$5"
+  local selects="$6"
+  local inserts="$7"
+  local updates="$8"
+  local deletes="$9"
+
+  echo ""
+  echo "============================================"
+  echo "Phase: $phase"
+  echo "  threads=$threads  events=$events  table_size=$table_size"
+  echo "  unknown=$unknown_queries select=$selects insert=$inserts update=$updates delete=$deletes"
+  echo "============================================"
+
+  mysql -u root -S "$MYSQL_SOCK" <<SQL
+SET GLOBAL workload_instrumentation_table_size = $table_size;
 SET GLOBAL workload_instrumentation_enabled = ON;
 TRUNCATE TABLE performance_schema.workload_instrumentation;
 SQL
 
-echo "Running sysbench run..."
-sysbench "${SCRIPT_DIR}/sysbench_workloads.lua" \
-  --mysql-socket="$MYSQL_SOCK" \
-  --mysql-user=root \
-  --mysql-db=sbtest \
-  --threads=1 \
-  --events=1 \
-  --report-interval=0 \
-  run
+  local events_per_thread=$((events / threads))
 
-mysql -u root -S "$MYSQL_SOCK" -e "SET GLOBAL workload_instrumentation_enabled = OFF"
+  sysbench "${COMMON_SB_OPTS[@]}" \
+    --threads="$threads" \
+    --events="$events" \
+    --unknown-queries="$unknown_queries" \
+    --selects-per-event="$selects" \
+    --inserts-per-event="$inserts" \
+    --updates-per-event="$updates" \
+    --deletes-per-event="$deletes" \
+    run
 
-echo "Verifying results..."
-bash "${SCRIPT_DIR}/verify_results.sh"
+  mysql -u root -S "$MYSQL_SOCK" -e "SET GLOBAL workload_instrumentation_enabled = OFF"
+
+  echo "Verifying $phase..."
+  THREADS="$threads" \
+  EVENTS_PER_THREAD="$events_per_thread" \
+  UNKNOWN_QUERIES="$unknown_queries" \
+  SELECTS_PER_EVENT="$selects" \
+  INSERTS_PER_EVENT="$inserts" \
+  UPDATES_PER_EVENT="$updates" \
+  DELETES_PER_EVENT="$deletes" \
+  TABLE_SIZE="$table_size" \
+  PHASE="$phase" \
+  bash "${SCRIPT_DIR}/verify_results.sh"
+}
+
+#            phase name            threads events tbl_sz unknown sel ins upd del
+run_phase    "multi-thread-dml"    4       4      10     5       3   2   2   1
+run_phase    "overflow"            6       6      4      3       2   1   1   1
+run_phase    "single-thread-heavy" 1       1      20     10      5   5   3   2
+
+echo ""
+echo "All phases passed."
