@@ -136,7 +136,25 @@ instrumented query containing: `workload_name`, `team_id`, `timer_wait_ns`, `cpu
 `select_range_check`, `select_scan`, `sort_merge_passes`, `sort_range`, `sort_rows`, `sort_scan`,
 `no_index_used`, `no_good_index_used`.
 
-With `warnings_enabled = ON`, this JSON is pushed to the client as a note-level warning.
+With `warnings_enabled = ON` (the default), this JSON is pushed to the client as a note-level
+warning after each instrumented query. Clients can retrieve it with `SHOW WARNINGS`:
+
+```sql
+mysql> SELECT /* WORKLOAD_NAME=api_endpoint_1 */ * FROM test.test_table WHERE id=4;
++----+---------+
+| id | content |
++----+---------+
+|  4 | dd      |
++----+---------+
+1 row in set, 1 warning (0.00 sec)
+
+mysql> SHOW WARNINGS;
++-------+------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Level | Code | Message                                                                                                                                                                                                                                                                                                                                                                                                                        |
++-------+------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Note  | 1003 | {"workload_name":"api_endpoint_1","team_id":0,"timer_wait_ns":136354,"cpu_time_ns":0,"lock_time_us":2,"rows_affected":0,"rows_examined":1,"rows_sent":1,"created_tmp_disk_tables":0,"created_tmp_tables":0,"select_full_join":0,"select_full_range_join":0,"select_range":0,"select_range_check":0,"select_scan":0,"sort_merge_passes":0,"sort_range":0,"sort_rows":0,"sort_scan":0,"no_index_used":0,"no_good_index_used":0} |
++-------+------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+```
 
 With `socket_enabled = ON`, the JSON is sent over a Unix DGRAM socket wrapped in a binary Murron
 frame (version, nanosecond timestamp, hostname, message type, payload). The socket auto-reconnects
